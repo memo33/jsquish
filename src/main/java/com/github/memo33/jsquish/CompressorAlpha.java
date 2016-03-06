@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -29,20 +30,20 @@ import static java.lang.Math.*;
 
 final class CompressorAlpha {
 
-    private static final int[] swapped = new int[16];
+    private final int[] swapped = new int[16];
 
-    private static final int[] codes5 = new int[8];
-    private static final int[] codes7 = new int[8];
+    private final int[] codes5 = new int[8];
+    private final int[] codes7 = new int[8];
 
-    private static final int[] indices5 = new int[16];
-    private static final int[] indices7 = new int[16];
+    private final int[] indices5 = new int[16];
+    private final int[] indices7 = new int[16];
 
-    private static final int[] codes = new int[8];
-    private static final int[] indices = new int[16];
+    private final int[] codes = new int[8];
+    private final int[] indices = new int[16];
 
-    private CompressorAlpha() {}
+    CompressorAlpha() {}
 
-    static void compressAlphaDxt3(final byte[] rgba, final int mask, final byte[] block, final int offset) {
+    void compressAlphaDxt3(final byte[] rgba, final int mask, final byte[] block, final int offset) {
         // quantise and pack the alpha values pairwise
         for ( int i = 0; i < 8; ++i ) {
             // quantise down to 4 bits
@@ -64,7 +65,7 @@ final class CompressorAlpha {
         }
     }
 
-    static void decompressAlphaDxt3(final byte[] rgba, final byte[] block, final int offset) {
+    void decompressAlphaDxt3(final byte[] rgba, final byte[] block, final int offset) {
         // unpack the alpha values pairwise
         for ( int i = 0; i < 8; ++i ) {
             // quantise down to 4 bits
@@ -80,7 +81,7 @@ final class CompressorAlpha {
         }
     }
 
-    private static int fitCodes(final byte[] rgba, final int mask, final int[] codes, final int[] indices) {
+    private int fitCodes(final byte[] rgba, final int mask, final int[] codes, final int[] indices) {
         // fit each alpha value to the codebook
         int err = 0;
         for ( int i = 0; i < 16; ++i ) {
@@ -117,7 +118,7 @@ final class CompressorAlpha {
         return err;
     }
 
-    private static void writeAlphaBlock(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
+    private void writeAlphaBlock(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
         // write the first two bytes
         block[offset + 0] = (byte)alpha0;
         block[offset + 1] = (byte)alpha1;
@@ -139,10 +140,8 @@ final class CompressorAlpha {
         }
     }
 
-    private static void writeAlphaBlock5(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
+    private void writeAlphaBlock5(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
         // check the relative values of the endpoints
-        final int[] swapped = CompressorAlpha.swapped;
-
         if ( alpha0 > alpha1 ) {
             // swap the indices
             for ( int i = 0; i < 16; ++i ) {
@@ -165,10 +164,8 @@ final class CompressorAlpha {
         }
     }
 
-    private static void writeAlphaBlock7(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
+    private void writeAlphaBlock7(final int alpha0, final int alpha1, final int[] indices, final byte[] block, final int offset) {
         // check the relative values of the endpoints
-        final int[] swapped = CompressorAlpha.swapped;
-
         if ( alpha0 < alpha1 ) {
             // swap the indices
             for ( int i = 0; i < 16; ++i ) {
@@ -189,7 +186,7 @@ final class CompressorAlpha {
         }
     }
 
-    static void compressAlphaDxt5(final byte[] rgba, final int mask, final byte[] block, final int offset) {
+    void compressAlphaDxt5(final byte[] rgba, final int mask, final byte[] block, final int offset) {
         // get the range for 5-alpha and 7-alpha interpolation
         int min5 = 255;
         int max5 = 0;
@@ -231,8 +228,6 @@ final class CompressorAlpha {
             min7 = max(0, max7 - 7);
 
         // set up the 5-alpha code book
-        final int[] codes5 = CompressorAlpha.codes5;
-
         codes5[0] = min5;
         codes5[1] = max5;
         for ( int i = 1; i < 5; ++i )
@@ -241,8 +236,6 @@ final class CompressorAlpha {
         codes5[7] = 255;
 
         // set up the 7-alpha code book
-        final int[] codes7 = CompressorAlpha.codes7;
-
         codes7[0] = min7;
         codes7[1] = max7;
         for ( int i = 1; i < 7; ++i )
@@ -259,14 +252,12 @@ final class CompressorAlpha {
             writeAlphaBlock7(min7, max7, indices7, block, offset);
     }
 
-    static void decompressAlphaDxt5(final byte[] rgba, final byte[] block, final int offset) {
+    void decompressAlphaDxt5(final byte[] rgba, final byte[] block, final int offset) {
         // get the two alpha values
         final int alpha0 = (block[offset + 0] & 0xFF);
         final int alpha1 = (block[offset + 1] & 0xFF);
 
         // compare the values to build the codebook
-        final int[] codes = CompressorAlpha.codes;
-
         codes[0] = alpha0;
         codes[1] = alpha1;
         if ( alpha0 <= alpha1 ) {
@@ -282,8 +273,6 @@ final class CompressorAlpha {
         }
 
         // decode the indices
-        final int[] indices = CompressorAlpha.indices;
-
         int src = 2;
         int dest = 0;
         for ( int i = 0; i < 2; ++i ) {

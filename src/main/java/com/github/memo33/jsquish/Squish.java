@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -46,18 +47,18 @@ public final class Squish {
 
         CLUSTER_FIT() {
 
-            CompressorColourFit getCompressor(final ColourSet colours, final CompressionType type, final CompressionMetric metric) {
-                return new CompressorCluster(colours, type, metric);
+            CompressorColourFit getCompressor(final ColourSet colours, final CompressionType type, final CompressionMetric metric, final ColourBlock writer) {
+                return new CompressorCluster(colours, type, metric, writer);
 
             }},
         RANGE_FIT() {
 
-            CompressorColourFit getCompressor(final ColourSet colours, final CompressionType type, final CompressionMetric metric) {
-                return new CompressorRange(colours, type, metric);
+            CompressorColourFit getCompressor(final ColourSet colours, final CompressionType type, final CompressionMetric metric, final ColourBlock writer) {
+                return new CompressorRange(colours, type, metric, writer);
 
             }};
 
-        abstract CompressorColourFit getCompressor(ColourSet colours, CompressionType type, CompressionMetric metric);
+        abstract CompressorColourFit getCompressor(ColourSet colours, CompressionType type, CompressionMetric metric, ColourBlock writer);
 
     }
 
@@ -84,7 +85,44 @@ public final class Squish {
 
     }
 
-    private static final ColourSet colours = new ColourSet();
+    private static class CompressionTask {
+
+        private final ColourSet colours = new ColourSet();
+        private final ColourBlock writer = new ColourBlock();
+
+        private final CompressionType type;
+        private final CompressionMethod method;
+        private final CompressionMetric metric;
+        private final boolean weightAlpha;
+
+        private final CompressorColourFit multiColour;
+        private CompressorSingleColour singleColour = null;
+        private CompressorAlpha alphaCompressor = null;
+
+        CompressionTask(CompressionType type, CompressionMethod method, CompressionMetric metric, boolean weightAlpha) {
+            this.type = type;
+            this.method = method;
+            this.metric = metric;
+            this.weightAlpha = weightAlpha;
+            this.multiColour = method.getCompressor(colours, type, metric, writer);
+        }
+
+        CompressorSingleColour getSingleColourCompressor() {
+            // initialise if needed
+            if (singleColour == null) {
+                singleColour = new CompressorSingleColour(colours, type, writer);
+            }
+            return singleColour;
+        }
+
+        CompressorAlpha getAlphaCompressor() {
+            // initialise if needed
+            if (alphaCompressor == null) {
+                alphaCompressor = new CompressorAlpha();
+            }
+            return alphaCompressor;
+        }
+    }
 
     private Squish() {
     }
@@ -107,14 +145,14 @@ public final class Squish {
     }
 
     // TODO: Add interface for ByteBuffers
-    // TODO: Allow concurrent calls: Un-static everything, create basic compressors once, objectify alpha compressors (DXT3 & DXT5 implementations)
+    // concurrent calls allowed!
     public static byte[] compressImage(final byte[] rgba, final int width, final int height, byte[] blocks,
                                        final CompressionType type, final CompressionMethod method, final CompressionMetric metric, final boolean weightAlpha) {
         blocks = checkCompressInput(rgba, width, height, blocks, type);
 
-        //final CompressorAlpha alphaCompressor = new CompressorAlpha();
-
         final byte[] sourceRGBA = new byte[16 * 4];
+
+        final CompressionTask task = new CompressionTask(type, method, metric, weightAlpha);
 
         // loop over blocks
         int targetBlock = 0;
@@ -146,7 +184,7 @@ public final class Squish {
                 }
 
                 // compress it into the output
-                compress(sourceRGBA, mask, blocks, targetBlock, type, method, metric, weightAlpha);
+                compress(sourceRGBA, mask, blocks, targetBlock, task);
 
                 // advance
                 targetBlock += type.blockSize;
@@ -168,41 +206,44 @@ public final class Squish {
         return blocks;
     }
 
-    private static void compress(final byte[] rgba, final int mask, final byte[] block, final int offset,
-                                 final CompressionType type, final CompressionMethod method, final CompressionMetric metric, final boolean weightAlpha) {
+    private static void compress(final byte[] rgba, final int mask, final byte[] block, final int offset, final CompressionTask task) {
+        final CompressionType type = task.type;
         // get the block locations
         final int colourBlock = offset + type.blockOffset;
         final int alphaBlock = offset;
 
         // create the minimal point set
-        colours.init(rgba, mask, type, weightAlpha);
+        task.colours.init(rgba, mask, type, task.weightAlpha);
 
         // check the compression type and compress colour
         final CompressorColourFit fit;
-        if ( colours.getCount() == 1 ) // always do a single colour fit
-            fit = new CompressorSingleColour(colours, type);
+        if ( task.colours.getCount() == 1 ) // always do a single colour fit
+            fit = task.getSingleColourCompressor();
         else
-            fit = method.getCompressor(colours, type, metric);
+            fit = task.multiColour;
+        fit.init();
         fit.compress(block, colourBlock);
 
         // compress alpha separately if necessary
         if ( type == CompressionType.DXT3 )
-            CompressorAlpha.compressAlphaDxt3(rgba, mask, block, alphaBlock);
+            task.getAlphaCompressor().compressAlphaDxt3(rgba, mask, block, alphaBlock);
         else if ( type == CompressionType.DXT5 )
-            CompressorAlpha.compressAlphaDxt5(rgba, mask, block, alphaBlock);
+            task.getAlphaCompressor().compressAlphaDxt5(rgba, mask, block, alphaBlock);
     }
 
     public static byte[] decompressImage(byte[] rgba, final int width, final int height, final byte[] blocks, final CompressionType type) {
         rgba = checkDecompressInput(rgba, width, height, blocks, type);
 
         final byte[] targetRGBA = new byte[16 * 4];
+        final ColourBlock writer = new ColourBlock();
+        final CompressorAlpha alphaCompressor = new CompressorAlpha();
 
         // loop over blocks
         int sourceBlock = 0;
         for ( int y = 0; y < height; y += 4 ) {
             for ( int x = 0; x < width; x += 4 ) {
                 // decompress the block
-                decompress(targetRGBA, blocks, sourceBlock, type);
+                decompress(targetRGBA, blocks, sourceBlock, type, writer, alphaCompressor);
 
                 // write the decompressed pixels to the correct image locations
                 int sourcePixel = 0;
@@ -243,19 +284,19 @@ public final class Squish {
         return rgba;
     }
 
-    private static void decompress(final byte[] rgba, final byte[] block, final int offset, final CompressionType type) {
+    private static void decompress(final byte[] rgba, final byte[] block, final int offset, final CompressionType type, final ColourBlock writer, final CompressorAlpha alphaCompressor) {
         // get the block locations
         final int colourBlock = offset + type.blockOffset;
         final int alphaBock = offset;
 
         // decompress colour
-        ColourBlock.decompressColour(rgba, block, colourBlock, type == CompressionType.DXT1);
+        writer.decompressColour(rgba, block, colourBlock, type == CompressionType.DXT1);
 
         // decompress alpha separately if necessary
         if ( type == CompressionType.DXT3 )
-            CompressorAlpha.decompressAlphaDxt3(rgba, block, alphaBock);
+            alphaCompressor.decompressAlphaDxt3(rgba, block, alphaBock);
         else if ( type == CompressionType.DXT5 )
-            CompressorAlpha.decompressAlphaDxt5(rgba, block, alphaBock);
+            alphaCompressor.decompressAlphaDxt5(rgba, block, alphaBock);
     }
 
 }

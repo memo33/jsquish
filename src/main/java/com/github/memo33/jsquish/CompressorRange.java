@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -30,29 +31,31 @@ import com.github.memo33.jsquish.Squish.CompressionType;
 
 final class CompressorRange extends CompressorColourFit {
 
-    private static final int[] closest = new int[16];
-
-    private static final int[] indices = new int[16];
-
-    private static final Vec[] codes = new Vec[4];
-
-    static {
-        for ( int i = 0; i < codes.length; i++ )
-            codes[i] = new Vec();
-    }
+    private final int[] closest = new int[16];
+    private final int[] indices = new int[16];
+    private final Vec[] codes = new Vec[4];
 
     private final CompressionMetric metric;
+    private final ColourBlock colourBlockWriter;
     private final Vec start = new Vec();
     private final Vec end = new Vec();
 
     private float bestError;
 
-    CompressorRange(final ColourSet colours, final CompressionType type, final CompressionMetric metric) {
+    CompressorRange(final ColourSet colours, final CompressionType type, final CompressionMetric metric, final ColourBlock writer) {
         super(colours, type);
+
+        for ( int i = 0; i < codes.length; i++ ) {
+            codes[i] = new Vec();
+        }
 
         // initialise the metric
         this.metric = metric;
 
+        this.colourBlockWriter = writer;
+    }
+
+    void init() {
         // initialise the best error
         bestError = Float.MAX_VALUE;
 
@@ -61,7 +64,7 @@ final class CompressorRange extends CompressorColourFit {
         final Vec[] points = this.colours.getPoints();
 
         // get the covariance matrix
-        final Matrix covariance = Matrix.computeWeightedCovariance(colours, CompressorColourFit.covariance);
+        final Matrix covariance = Matrix.computeWeightedCovariance(colours, null);
 
         // compute the principle component
         final Vec principle = Matrix.computePrincipleComponent(covariance);
@@ -120,13 +123,11 @@ final class CompressorRange extends CompressorColourFit {
         final Vec v = new Vec();
 
         // create a codebook
-        final Vec[] codes = CompressorRange.codes;
         codes[0].set(start);
         codes[1].set(end);
         codes[2].set(start).add(end).mul(0.5f);
 
         // match each point to the closest code
-        final int[] closest = CompressorRange.closest;
         float error = 0.0f;
         for ( int i = 0; i < count; ++i ) {
             final Vec p = points[i];
@@ -161,7 +162,7 @@ final class CompressorRange extends CompressorColourFit {
             colours.remapIndices(closest, indices);
 
             // save the block
-            ColourBlock.writeColourBlock3(start, end, indices, block, offset);
+            colourBlockWriter.writeColourBlock3(start, end, indices, block, offset);
 
             // save the error
             bestError = error;
@@ -176,14 +177,12 @@ final class CompressorRange extends CompressorColourFit {
         final Vec v = new Vec();
 
         // create a codebook
-        final Vec[] codes = CompressorRange.codes;
         codes[0].set(start);
         codes[1].set(end);
         codes[2].set(2.0f / 3.0f).mul(start).add(v.set(1.0f / 3.0f).mul(end));
         codes[3].set(1.0f / 3.0f).mul(start).add(v.set(2.0f / 3.0f).mul(end));
 
         // match each point to the closest code
-        final int[] closest = CompressorRange.closest;
         float error = 0.0f;
         for ( int i = 0; i < count; ++i ) {
             final Vec p = points[i];
@@ -218,7 +217,7 @@ final class CompressorRange extends CompressorColourFit {
             colours.remapIndices(closest, indices);
 
             // save the block
-            ColourBlock.writeColourBlock4(start, end, indices, block, offset);
+            colourBlockWriter.writeColourBlock4(start, end, indices, block, offset);
 
             // save the error
             bestError = error;

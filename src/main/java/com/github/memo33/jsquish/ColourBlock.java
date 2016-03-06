@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -32,13 +33,11 @@ import static com.github.memo33.jsquish.CompressorColourFit.*;
 
 final class ColourBlock {
 
-    private static final int[] remapped = new int[16];
+    private final int[] remapped = new int[16];
+    private final int[] indices = new int[16];
+    private final int[] codes = new int[16];
 
-    private static final int[] indices = new int[16];
-
-    private static final int[] codes = new int[16];
-
-    private ColourBlock() {}
+    ColourBlock() {}
 
     static int gammaColour(final float colour, final float scale) {
         //return round(scale * (float)Math.pow(colour, 1.0 / 2.2));
@@ -69,7 +68,7 @@ final class ColourBlock {
         }
     }
 
-    static void writeColourBlock3(final Vec start, final Vec end, final int[] indices, final byte[] block, final int offset) {
+    void writeColourBlock3(final Vec start, final Vec end, final int[] indices, final byte[] block, final int offset) {
         // get the packed values
         int a = floatTo565(start);
         int b = floatTo565(end);
@@ -97,7 +96,7 @@ final class ColourBlock {
         writeColourBlock(a, b, remapped, block, offset);
     }
 
-    static void writeColourBlock4(final Vec start, final Vec end, final int[] indices, final byte[] block, final int offset) {
+    void writeColourBlock4(final Vec start, final Vec end, final int[] indices, final byte[] block, final int offset) {
         // get the packed values
         int a = floatTo565(start);
         int b = floatTo565(end);
@@ -123,10 +122,8 @@ final class ColourBlock {
         writeColourBlock(a, b, remapped, block, offset);
     }
 
-    static void decompressColour(final byte[] rgba, final byte[] block, final int offset, final boolean isDXT1) {
+    void decompressColour(final byte[] rgba, final byte[] block, final int offset, final boolean isDXT1) {
         // unpack the endpoints
-        final int[] codes = ColourBlock.codes;
-
         final int a = unpack565(block, offset, codes, 0);
         final int b = unpack565(block, offset + 2, codes, 4);
 
@@ -149,8 +146,6 @@ final class ColourBlock {
         codes[12 + 3] = (isDXT1 && a <= b) ? 0 : 255;
 
         // unpack the indices
-        final int[] indices = ColourBlock.indices;
-
         for ( int i = 0; i < 4; ++i ) {
             final int index = 4 * i;
             final int packed = (block[offset + 4 + i] & 0xFF);

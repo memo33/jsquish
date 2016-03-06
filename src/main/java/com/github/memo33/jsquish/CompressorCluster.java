@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -32,45 +33,37 @@ final class CompressorCluster extends CompressorColourFit {
 
     private static final int MAX_ITERATIONS = 8;
 
-    private static final float TWO_THIRDS = 2.0f / 3.0f;
-    private static final float ONE_THIRD = 1.0f / 3.0f;
-    private static final float HALF = 0.5f;
-    private static final float ZERO = 0.0f;
+    private final int[] indices = new int[16];
+    private final int[] bestIndices = new int[16];
+    private final int[] unordered = new int[16];
+    private final int[] orders = new int[16 * MAX_ITERATIONS];
 
-    private static Vec principle;
+    private final float[] alpha = new float[16];
+    private final float[] beta = new float[16];
+    private final float[] weights = new float[16];
+    private final float[] weighted = new float[16 * 3];
 
-    private static final float[] dps = new float[16];
+    private final CompressionMetric metric;
+    private final ColourBlock colourBlockWriter;
+    private final Vec xxSum = new Vec();
 
-    private static final float[] weighted = new float[16 * 3];
-    private static final float[] weights = new float[16];
+    private Vec principle;
+    private float totalBestError;
 
-    private static CompressionMetric metric;
-
-    private static final int[] indices = new int[16];
-    private static final int[] bestIndices = new int[16];
-
-    private static final float[] alpha = new float[16];
-    private static final float[] beta = new float[16];
-
-    private static final int[] unordered = new int[16];
-
-    private static final Vec xxSum = new Vec();
-
-    private static float bestError;
-
-    private static final int[] orders = new int[16 * MAX_ITERATIONS];
-
-    CompressorCluster(final ColourSet colours, final CompressionType type, final CompressionMetric metric) {
+    CompressorCluster(final ColourSet colours, final CompressionType type, final CompressionMetric metric, final ColourBlock writer) {
         super(colours, type);
-
-        // initialise the best error
-        bestError = Float.MAX_VALUE;
-
         // initialise the metric
-        CompressorCluster.metric = metric;
+        this.metric = metric;
+
+        this.colourBlockWriter = writer;
+    }
+
+    void init() {
+        // initialise the best error
+        totalBestError = Float.MAX_VALUE;
 
         // get the covariance matrix
-        final Matrix covariance = Matrix.computeWeightedCovariance(colours, CompressorColourFit.covariance);
+        final Matrix covariance = Matrix.computeWeightedCovariance(colours, null);
 
         // compute the principle component
         principle = Matrix.computePrincipleComponent(covariance);
@@ -81,21 +74,13 @@ final class CompressorCluster extends CompressorColourFit {
 
         final Vec bestStart = new Vec(0.0f);
         final Vec bestEnd = new Vec(0.0f);
-        float bestError = CompressorCluster.bestError;
+        float bestError = this.totalBestError;
 
         final Vec a = new Vec();
         final Vec b = new Vec();
 
         // prepare an ordering using the principle axis
         constructOrdering(principle, 0);
-
-        // loop over iterations
-        final int[] indices = CompressorCluster.indices;
-        final int[] bestIndices = CompressorCluster.bestIndices;
-
-        final float[] alpha = CompressorCluster.alpha;
-        final float[] beta = CompressorCluster.beta;
-        final float[] weights = CompressorCluster.weights;
 
         // check all possible clusters and iterate on the total order
         int bestIteration = 0;
@@ -104,19 +89,19 @@ final class CompressorCluster extends CompressorColourFit {
             for ( int m = 0; m < count; ++m ) {
                 indices[m] = 0;
                 alpha[m] = weights[m];
-                beta[m] = ZERO;
+                beta[m] = 0.0f;
             }
             for ( int i = count; i >= 0; --i ) {
                 // second cluster [i,j) is half along
                 for ( int m = i; m < count; ++m ) {
                     indices[m] = 2;
-                    alpha[m] = beta[m] = HALF * weights[m];
+                    alpha[m] = beta[m] = 0.5f * weights[m];
                 }
                 for ( int j = count; j >= i; --j ) {
                     // last cluster [j,k) is at the end
                     if ( j < count ) {
                         indices[j] = 1;
-                        alpha[j] = ZERO;
+                        alpha[j] = 0.0f;
                         beta[j] = weights[j];
                     }
 
@@ -148,10 +133,7 @@ final class CompressorCluster extends CompressorColourFit {
         }
 
         // save the block if necessary
-        if ( bestError < CompressorCluster.bestError ) {
-            final int[] orders = CompressorCluster.orders;
-            final int[] unordered = CompressorCluster.unordered;
-
+        if ( bestError < this.totalBestError ) {
             // remap the indices
             final int order = 16 * bestIteration;
 
@@ -160,10 +142,10 @@ final class CompressorCluster extends CompressorColourFit {
             colours.remapIndices(unordered, bestIndices);
 
             // save the block
-            ColourBlock.writeColourBlock3(bestStart, bestEnd, bestIndices, block, offset);
+            colourBlockWriter.writeColourBlock3(bestStart, bestEnd, bestIndices, block, offset);
 
             // save the error
-            CompressorCluster.bestError = bestError;
+            this.totalBestError = bestError;
         }
     }
 
@@ -172,7 +154,7 @@ final class CompressorCluster extends CompressorColourFit {
 
         final Vec bestStart = new Vec(0.0f);
         final Vec bestEnd = new Vec(0.0f);
-        float bestError = CompressorCluster.bestError;
+        float bestError = this.totalBestError;
 
         final Vec start = new Vec();
         final Vec end = new Vec();
@@ -181,42 +163,33 @@ final class CompressorCluster extends CompressorColourFit {
         constructOrdering(principle, 0);
 
         // check all possible clusters and iterate on the total order
-        final int[] indices = CompressorCluster.indices;
-        final int[] bestIndices = CompressorCluster.bestIndices;
-
-        final float[] alpha = CompressorCluster.alpha;
-        final float[] beta = CompressorCluster.beta;
-        final float[] weights = CompressorCluster.weights;
-
         int bestIteration = 0;
-
-        // loop over iterations
         for ( int iteration = 0; ; ) {
             // first cluster [0,i) is at the start
             for ( int m = 0; m < count; ++m ) {
                 indices[m] = 0;
                 alpha[m] = weights[m];
-                beta[m] = ZERO;
+                beta[m] = 0.0f;
             }
             for ( int i = count; i >= 0; --i ) {
                 // second cluster [i,j) is one third along
                 for ( int m = i; m < count; ++m ) {
                     indices[m] = 2;
-                    alpha[m] = TWO_THIRDS * weights[m];
-                    beta[m] = ONE_THIRD * weights[m];
+                    alpha[m] = (2.0f / 3.0f) * weights[m];
+                    beta[m] = (1.0f / 3.0f) * weights[m];
                 }
                 for ( int j = count; j >= i; --j ) {
                     // third cluster [j,k) is two thirds along
                     for ( int m = j; m < count; ++m ) {
                         indices[m] = 3;
-                        alpha[m] = ONE_THIRD * weights[m];
-                        beta[m] = TWO_THIRDS * weights[m];
+                        alpha[m] = (1.0f / 3.0f) * weights[m];
+                        beta[m] = (2.0f / 3.0f) * weights[m];
                     }
                     for ( int k = count; k >= j; --k ) {
                         // last cluster [k,n) is at the end
                         if ( k < count ) {
                             indices[k] = 1;
-                            alpha[k] = ZERO;
+                            alpha[k] = 0.0f;
                             beta[k] = weights[k];
                         }
 
@@ -250,10 +223,7 @@ final class CompressorCluster extends CompressorColourFit {
         }
 
         // save the block if necessary
-        if ( bestError < CompressorCluster.bestError ) {
-            final int[] orders = CompressorCluster.orders;
-            final int[] unordered = CompressorCluster.unordered;
-
+        if ( bestError < this.totalBestError ) {
             // remap the indices
             final int order = 16 * bestIteration;
             for ( int i = 0; i < count; ++i )
@@ -261,10 +231,10 @@ final class CompressorCluster extends CompressorColourFit {
             colours.remapIndices(unordered, bestIndices);
 
             // save the block
-            ColourBlock.writeColourBlock4(bestStart, bestEnd, bestIndices, block, offset);
+            colourBlockWriter.writeColourBlock4(bestStart, bestEnd, bestIndices, block, offset);
 
             // save the error
-            CompressorCluster.bestError = bestError;
+            this.totalBestError = bestError;
         }
     }
 
@@ -273,10 +243,8 @@ final class CompressorCluster extends CompressorColourFit {
         final int count = colours.getCount();
         final Vec[] values = colours.getPoints();
 
-        final int[] orders = CompressorCluster.orders;
-
         // build the list of dot products
-        final float[] dps = CompressorCluster.dps;
+        final float[] dps = new float[16];
         final int order = 16 * iteration;
         for ( int i = 0; i < count; ++i ) {
             dps[i] = values[i].dot(axis);
@@ -315,8 +283,6 @@ final class CompressorCluster extends CompressorColourFit {
         final float[] cWeights = colours.getWeights();
         xxSum.set(0.0f);
 
-        final float[] weighted = CompressorCluster.weighted;
-
         for ( int i = 0, j = 0; i < count; ++i, j += 3 ) {
             final int p = orders[order + i];
 
@@ -352,10 +318,6 @@ final class CompressorCluster extends CompressorColourFit {
         float betax_sumX = 0f;
         float betax_sumY = 0f;
         float betax_sumZ = 0f;
-
-        final float[] alpha = CompressorCluster.alpha;
-        final float[] beta = CompressorCluster.beta;
-        final float[] weighted = CompressorCluster.weighted;
 
         // accumulate all the quantities we need
         for ( int i = 0, j = 0; i < count; ++i, j += 3 ) {

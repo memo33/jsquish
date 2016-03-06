@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -34,24 +35,29 @@ import com.github.memo33.jsquish.Squish.CompressionType;
 
 final class CompressorSingleColour extends CompressorColourFit {
 
-    private static final int[] indices = new int[16];
+    private final int[] indices = new int[16];
 
-    private static final int[][][][] lookups = new int[3][][][];
+    private final int[][][][] lookups = new int[3][][][];
 
-    private static int[][] sources = new int[3][];
+    private final int[][] sources = new int[3][];
 
-    private static final Vec start = new Vec();
-    private static final Vec end = new Vec();
+    private final ColourBlock colourBlockWriter;
+    private final Vec start = new Vec();
+    private final Vec end = new Vec();
 
-    private static int[] index = new int[1];
+    private final int[] index = new int[1];
 
-    private static int bestError;
+    private int totalBestError;
 
     private int[] colour = new int[3];
 
-    CompressorSingleColour(final ColourSet colours, final CompressionType type) {
+    CompressorSingleColour(final ColourSet colours, final CompressionType type, final ColourBlock writer) {
         super(colours, type);
 
+        this.colourBlockWriter = writer;
+    }
+
+    void init() {
         // grab the single colour
         final Vec colour = colours.getPoints()[0];
         this.colour[0] = round(255.0f * colour.x());
@@ -59,7 +65,7 @@ final class CompressorSingleColour extends CompressorColourFit {
         this.colour[2] = round(255.0f * colour.z());
 
         // initialise the best error
-        bestError = Integer.MAX_VALUE;
+        totalBestError = Integer.MAX_VALUE;
     }
 
     void compress3(final byte[] block, final int offset) {
@@ -72,15 +78,15 @@ final class CompressorSingleColour extends CompressorColourFit {
         final int error = computeEndPoints(3, lookups);
 
         // build the block if we win
-        if ( error < bestError ) {
+        if ( error < totalBestError ) {
             // remap the indices
             colours.remapIndices(index, indices);
 
             // save the block
-            writeColourBlock3(start, end, indices, block, offset);
+            colourBlockWriter.writeColourBlock3(start, end, indices, block, offset);
 
             // save the error
-            bestError = error;
+            totalBestError = error;
         }
     }
 
@@ -94,22 +100,20 @@ final class CompressorSingleColour extends CompressorColourFit {
         final int error = computeEndPoints(4, lookups);
 
         // build the block if we win
-        if ( error < bestError ) {
+        if ( error < totalBestError ) {
             // remap the indices
             colours.remapIndices(index, indices);
 
             // save the block
-            writeColourBlock4(start, end, indices, block, offset);
+            colourBlockWriter.writeColourBlock4(start, end, indices, block, offset);
 
             // save the error
-            bestError = error;
+            totalBestError = error;
         }
     }
 
     private int computeEndPoints(final int count, final int[][][][] lookups) {
-        final int[][] sources = CompressorSingleColour.sources;
-
-        int bestError = CompressorSingleColour.bestError;
+        int bestError = totalBestError;
 
         // check each index combination
         for ( int index = 0; index < count; ++index ) {
@@ -138,7 +142,7 @@ final class CompressorSingleColour extends CompressorColourFit {
                         sources[1][1] * GRID_Y_RCP,
                         sources[2][1] * GRID_Z_RCP);
 
-                CompressorSingleColour.index[0] = index;
+                this.index[0] = index;
                 bestError = error;
             }
         }

@@ -1,6 +1,7 @@
 /* -----------------------------------------------------------------------------
 
     Copyright (c) 2006 Simon Brown                          si@sjbrown.co.uk
+    Copyright (c) 2016 memo
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -31,9 +32,6 @@ import java.util.Arrays;
 final class Matrix {
 
     private static final float FLT_EPSILON = 0.00001f;
-
-    private static float[] m = new float[6];
-    private static float[] u = new float[6];
 
     private float[] values = new float[6];
 
@@ -94,22 +92,24 @@ final class Matrix {
         final float[] values = matrix.values;
 
         // compute M
-        final float[] m = Matrix.m;
-        m[0] = values[0] - evalue;
-        m[1] = values[1];
-        m[2] = values[2];
-        m[3] = values[3] - evalue;
-        m[4] = values[4];
-        m[5] = values[5] - evalue;
+        final float[] m = {
+            values[0] - evalue,
+            values[1],
+            values[2],
+            values[3] - evalue,
+            values[4],
+            values[5] - evalue
+        };
 
         // compute U
-        final float[] u = Matrix.u;
-        u[0] = m[3] * m[5] - m[4] * m[4];
-        u[1] = m[2] * m[4] - m[1] * m[5];
-        u[2] = m[1] * m[4] - m[2] * m[3];
-        u[3] = m[0] * m[5] - m[2] * m[2];
-        u[4] = m[1] * m[2] - m[4] * m[0];
-        u[5] = m[0] * m[3] - m[1] * m[1];
+        final float[] u = {
+            m[3] * m[5] - m[4] * m[4],
+            m[2] * m[4] - m[1] * m[5],
+            m[1] * m[4] - m[2] * m[3],
+            m[0] * m[5] - m[2] * m[2],
+            m[1] * m[2] - m[4] * m[0],
+            m[0] * m[3] - m[1] * m[1],
+        };
 
         // find the largest component
         float mc = abs(u[0]);
@@ -138,13 +138,14 @@ final class Matrix {
         final float[] values = matrix.values;
 
         // compute M
-        final float[] m = Matrix.m;
-        m[0] = values[0] - evalue;
-        m[1] = values[1];
-        m[2] = values[2];
-        m[3] = values[3] - evalue;
-        m[4] = values[4];
-        m[5] = values[5] - evalue;
+        final float[] m = {
+            values[0] - evalue,
+            values[1],
+            values[2],
+            values[3] - evalue,
+            values[4],
+            values[5] - evalue
+        };
 
         // find the largest component
         float mc = abs(m[0]);
