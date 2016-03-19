@@ -29,9 +29,19 @@ package com.github.memo33.jsquish;
 import com.github.memo33.jsquish.Squish.CompressionType;
 import com.github.memo33.jsquish.Squish.CompressionMetric;
 
+/* Compared to the original code, we improve the performance by iterating
+ * only over clusters that are similar to a canonical cluster choice,
+ * which saves about 50% of total iterations (number of least squares
+ * problems). This makes subiterations shorter, but on average a bit deeper,
+ * so we increase MAX_ITERATIONS a bit (this bound is rarely reached anyway).
+ *
+ * As the number of iterations is reduced, the error might increase
+ * slightly (usually less than 0.1%) by running into a different local
+ * minimum.
+ */
 final class CompressorCluster extends CompressorColourFit {
 
-    private static final int MAX_ITERATIONS = 8;
+    private static final int MAX_ITERATIONS = 10;
 
     private final int[] indices = new int[16];
     private final int[] bestIndices = new int[16];
@@ -80,9 +90,11 @@ final class CompressorCluster extends CompressorColourFit {
         final Vec b = new Vec();
 
         // prepare an ordering using the principle axis
-        constructOrdering(principle, 0);
+        int[] canonical = constructOrderingAndCanonicalCluster(principle, 0, false);
 
         // check all possible clusters and iterate on the total order
+        // (instead of checking all clusters, we only check those that
+        // are similar to the canonical one - saves about >50% of iterations)
         int bestIteration = 0;
         for ( int iteration = 0; ; ) {
             // first cluster [0,i) is at the start
@@ -91,13 +103,15 @@ final class CompressorCluster extends CompressorColourFit {
                 alpha[m] = weights[m];
                 beta[m] = 0.0f;
             }
-            for ( int i = count; i >= 0; --i ) {
+            for (int x = -canonical[1]; x <= canonical[0]; x++) {
+                int i = canonical[0] - x;
                 // second cluster [i,j) is half along
                 for ( int m = i; m < count; ++m ) {
                     indices[m] = 2;
                     alpha[m] = beta[m] = 0.5f * weights[m];
                 }
-                for ( int j = count; j >= i; --j ) {
+                for (int y = -canonical[2]; y <= canonical[1] && y <= canonical[1]+x; y++) {
+                    int j = i + canonical[1] + x - y;
                     // last cluster [j,k) is at the end
                     if ( j < count ) {
                         indices[j] = 1;
@@ -128,7 +142,8 @@ final class CompressorCluster extends CompressorColourFit {
                 break;
 
             // stop if a new iteration is an ordering that has already been tried
-            if ( !constructOrdering(a.set(bestEnd).sub(bestStart), iteration) )
+            canonical = constructOrderingAndCanonicalCluster(a.set(bestEnd).sub(bestStart), iteration, false);
+            if (canonical == null)
                 break;
         }
 
@@ -146,6 +161,7 @@ final class CompressorCluster extends CompressorColourFit {
 
             // save the error
             this.totalBestError = bestError;
+
         }
     }
 
@@ -160,9 +176,11 @@ final class CompressorCluster extends CompressorColourFit {
         final Vec end = new Vec();
 
         // prepare an ordering using the principle axis
-        constructOrdering(principle, 0);
+        int[] canonical = constructOrderingAndCanonicalCluster(principle, 0, true);
 
         // check all possible clusters and iterate on the total order
+        // (instead of checking all clusters, we only check those that
+        // are similar to the canonical one - saves about >50% of iterations)
         int bestIteration = 0;
         for ( int iteration = 0; ; ) {
             // first cluster [0,i) is at the start
@@ -171,21 +189,24 @@ final class CompressorCluster extends CompressorColourFit {
                 alpha[m] = weights[m];
                 beta[m] = 0.0f;
             }
-            for ( int i = count; i >= 0; --i ) {
+            for (int x = -canonical[1]; x <= canonical[0]; x++) {
+                int i = canonical[0] - x;
                 // second cluster [i,j) is one third along
                 for ( int m = i; m < count; ++m ) {
                     indices[m] = 2;
                     alpha[m] = (2.0f / 3.0f) * weights[m];
                     beta[m] = (1.0f / 3.0f) * weights[m];
                 }
-                for ( int j = count; j >= i; --j ) {
+                for (int y = -canonical[2]; y <= canonical[1] && y <= canonical[1]+x; y++) {
+                    int j = i + canonical[1] + x - y;
                     // third cluster [j,k) is two thirds along
                     for ( int m = j; m < count; ++m ) {
                         indices[m] = 3;
                         alpha[m] = (1.0f / 3.0f) * weights[m];
                         beta[m] = (2.0f / 3.0f) * weights[m];
                     }
-                    for ( int k = count; k >= j; --k ) {
+                    for (int z = -canonical[3]; z <= canonical[2] && z <= canonical[2]+y; z++) {
+                        int k = j + canonical[2] + y - z;
                         // last cluster [k,n) is at the end
                         if ( k < count ) {
                             indices[k] = 1;
@@ -218,7 +239,8 @@ final class CompressorCluster extends CompressorColourFit {
                 break;
 
             // stop if a new iteration is an ordering that has already been tried
-            if ( !constructOrdering(start.set(bestEnd).sub(bestStart), iteration) )
+            canonical = constructOrderingAndCanonicalCluster(start.set(bestEnd).sub(bestStart), iteration, true);
+            if (canonical == null)
                 break;
         }
 
@@ -235,10 +257,11 @@ final class CompressorCluster extends CompressorColourFit {
 
             // save the error
             this.totalBestError = bestError;
+
         }
     }
 
-    private boolean constructOrdering(final Vec axis, final int iteration) {
+    private int[] constructOrderingAndCanonicalCluster(final Vec axis, final int iteration, boolean isComp4) {
         // cache some values
         final int count = colours.getCount();
         final Vec[] values = colours.getPoints();
@@ -275,7 +298,7 @@ final class CompressorCluster extends CompressorColourFit {
                 }
             }
             if ( same )
-                return false;
+                return null;
         }
 
         // copy the ordering and weight all the points
@@ -301,7 +324,26 @@ final class CompressorCluster extends CompressorColourFit {
             weighted[j + 1] = wY;
             weighted[j + 2] = wZ;
         }
-        return true;
+        return canonicalCluster(dps, count, isComp4);
+    }
+
+    private static int[] canonicalCluster(float[] dps, int count, boolean isComp4) {
+        final int[] cluster = new int[isComp4 ? 4 : 3];
+        if (count == 0) return cluster;
+        // comp3:                           comp4:
+        // |...o...|...*...|...o...|        |...o...|...*...|...*...|...o...|
+        // a   0      1/2      1   b        a   0      1/3     2/3      1   b
+        final float a = dps[0];
+        final float b = dps[count - 1];
+        final float[] c = isComp4
+            ? new float[] { (3 * a + b) / 4, (a + b) / 2, (a + 3 * b) / 4, b }
+            : new float[] { (2 * a + b) / 3, (a + 2 * b) / 3, b };
+        for (int i = 0, j = 0; i < count; i++) {
+            while (dps[i] > c[j])
+                j++;
+            cluster[j] = cluster[j] + 1;
+        }
+        return cluster;
     }
 
     private float solveLeastSquares(final Vec start, final Vec end) {
