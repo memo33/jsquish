@@ -2,7 +2,7 @@ name := "jsquish"
 
 organization := "com.github.memo33"
 
-version := "2.0.0-SNAPSHOT"
+version := "2.0.0"
 
 scalaVersion := "2.11.8"
 
@@ -16,4 +16,4 @@ crossPaths := false
 autoScalaLibrary := false
 
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
+//libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
