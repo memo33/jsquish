@@ -1,6 +1,8 @@
 JSquish
 =======
 
+[![Build Status](https://travis-ci.org/memo33/jsquish.svg?branch=master)](https://travis-ci.org/memo33/jsquish)
+
 Based on JSquish library for DXT image compression by S. Brown, with small
 modifications in order to allow for concurrent calls to compression methods.
 Moreover, the ClusterFit algorithm was tweaked a little bit, which makes it
