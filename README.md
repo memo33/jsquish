@@ -1,6 +1,7 @@
 JSquish
 =======
 
+[ ![Download](https://api.bintray.com/packages/memo33/maven/jsquish/images/download.svg) ](https://bintray.com/memo33/maven/jsquish/_latestVersion)
 [![Build Status](https://travis-ci.org/memo33/jsquish.svg?branch=master)](https://travis-ci.org/memo33/jsquish)
 
 Based on JSquish library for DXT image compression by S. Brown, with small
