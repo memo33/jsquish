@@ -2,7 +2,9 @@ name := "jsquish"
 
 organization := "com.github.memo33"
 
-version := "2.0.0"
+version := "2.0.1"
+
+licenses += ("BSD 3-Clause", url("https://opensource.org/licenses/BSD-3-Clause"))
 
 scalaVersion := "2.11.8"
 

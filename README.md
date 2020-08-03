@@ -9,11 +9,8 @@ about twice as fast.
 Usage
 -----
 
-Add this to SBT:
+Add this to `build.sbt`:
 
-    resolvers += "memo33-gdrive-repo" at "https://googledrive.com/host/0B9r6o2oTyY34ZVc4SFBWMV9yb0E/repo/releases/"
+    resolvers += "memo33-bintray" at "http://dl.bintray.com/memo33/maven"
 
-    libraryDependencies += "com.github.memo33" % "jsquish" % "2.0.0"
-
-Or download directly at "https://googledrive.com/host/0B9r6o2oTyY34ZVc4SFBWMV9yb0E/repo/releases/com/github/memo33/jsquish/".
-
+    libraryDependencies += "com.github.memo33" % "jsquish" % "2.0.1"
