@@ -17,6 +17,6 @@ crossPaths := false
 
 autoScalaLibrary := false
 
-libraryDependencies += "org.scala-lang" % "scala-library" % scalaVersion.value % "test"
+// libraryDependencies += "org.scala-lang" % "scala-library" % scalaVersion.value % "test"
 
-//libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
+// libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15" % "test"
