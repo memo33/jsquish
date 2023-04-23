@@ -11,4 +11,4 @@ Usage
 
 Add this to `build.sbt`:
 
-    libraryDependencies += "com.github.memo33" % "jsquish" % "2.0.1"
+    libraryDependencies += "io.github.memo33" % "jsquish" % "2.1.0"

@@ -24,7 +24,7 @@
 
    -------------------------------------------------------------------------- */
 
-package com.github.memo33.jsquish;
+package io.github.memo33.jsquish;
 
 public final class Squish {
 

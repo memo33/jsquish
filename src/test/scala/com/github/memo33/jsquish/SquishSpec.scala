@@ -1,4 +1,4 @@
-//package com.github.memo33.jsquish
+//package io.github.memo33.jsquish
 //
 //import org.scalatest.{WordSpec, Matchers, PrivateMethodTester}
 //import gr.zdimensions.jsquish.{Squish => SquishOld}

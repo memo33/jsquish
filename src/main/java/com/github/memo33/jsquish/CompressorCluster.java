@@ -24,10 +24,10 @@
 
    -------------------------------------------------------------------------- */
 
-package com.github.memo33.jsquish;
+package io.github.memo33.jsquish;
 
-import com.github.memo33.jsquish.Squish.CompressionType;
-import com.github.memo33.jsquish.Squish.CompressionMetric;
+import io.github.memo33.jsquish.Squish.CompressionType;
+import io.github.memo33.jsquish.Squish.CompressionMetric;
 
 /* Compared to the original code, we improve the performance by iterating
  * only over clusters that are similar to a canonical cluster choice,
