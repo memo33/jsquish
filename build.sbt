@@ -2,7 +2,7 @@ name := "jsquish"
 
 organization := "io.github.memo33"
 
-version := "2.1.0-SNAPSHOT"
+version := "2.1.0"
 
 ThisBuild / versionScheme := Some("early-semver")
 
