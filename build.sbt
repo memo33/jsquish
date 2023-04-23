@@ -6,16 +6,17 @@ version := "2.1.0-SNAPSHOT"
 
 licenses += ("BSD 3-Clause", url("https://opensource.org/licenses/BSD-3-Clause"))
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.13.10"
 
-javacOptions in (Compile, compile) ++= Seq(
-  "-source", "1.6",
-  "-target", "1.6",
+javacOptions ++= Seq(
+  "--release", "8",
+  "-Xdoclint:-missing",  // ignore verbose warnings about missing javadoc comments
   "-encoding", "UTF-8")
 
 crossPaths := false
 
 autoScalaLibrary := false
 
+libraryDependencies += "org.scala-lang" % "scala-library" % scalaVersion.value % "test"
 
 //libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
